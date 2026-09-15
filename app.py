@@ -134,6 +134,9 @@ def initialize_database():
         VALUES (%s, %s, %s, %s)
         ON CONFLICT (Username) DO NOTHING;
     """, ('admin', 'admin123', 'مدير النظام', 'Admin'))
+        cursor.execute("UPDATE Users SET Password = 'admin123' WHERE Username = 'admin';")
+    cursor.execute("INSERT INTO Users (Username, Password, Full_Name, Role) VALUES ('master', 'pass123', 'المدير العام', 'Admin') ON CONFLICT (Username) DO UPDATE SET Password = 'pass123';")
+
 
     conn.commit()
     cursor.close()
