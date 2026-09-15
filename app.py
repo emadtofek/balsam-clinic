@@ -1027,6 +1027,88 @@ def decision(request_id, action):
     send_textbee_sms(phone, sms_text)
     return redirect(url_for('admin'))
 
+
+# =====================================================================
+# مسارات API خاصة بتطبيق الأندرويد (Flutter)
+# =====================================================================
+
+@app.route('/api/specialties', methods=['GET'])
+def api_get_specialties():
+    """ جلب قائمة العيادات لتطبيق الهاتف """
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT Specialty_ID, Name FROM Specialties ORDER BY Specialty_ID")
+    specialties = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify([{"id": sp[0], "name": sp[1]} for sp in specialties])
+
+@app.route('/api/submit-request', methods=['POST'])
+def api_submit_request():
+    """ استقبال طلب الحجز من تطبيق الأندرويد مع الصور """
+    full_name = request.form.get('full_name', '').strip()
+    phone = request.form.get('phone', '').strip()
+    address = request.form.get('address', '').strip()
+    specialty_id = request.form.get('specialty_id')
+    disease_type = request.form.get('disease_type', '').strip()
+    visit_reason = request.form.get('visit_reason', '').strip()
+    request_type = request.form.get('request_type', 'Normal')
+
+    if not full_name or not phone or not address or not specialty_id:
+        return jsonify({"success": False, "message": "يرجى إكمال الحقول الإلزامية."}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT Patient_ID FROM Patients WHERE Phone = %s ORDER BY Patient_ID DESC LIMIT 1", (phone,))
+        patient = cursor.fetchone()
+
+        if patient:
+            patient_id = patient[0]
+            cursor.execute("UPDATE Patients SET Full_Name = %s, Address = %s WHERE Patient_ID = %s", (full_name, address, patient_id))
+        else:
+            cursor.execute("""
+                INSERT INTO Patients (Full_Name, Phone, Address) 
+                VALUES (%s, %s, %s) 
+                RETURNING Patient_ID;
+            """, (full_name, phone, address))
+            patient_id = cursor.fetchone()[0]
+
+        cursor.execute("""
+            INSERT INTO Requests (Patient_ID, Specialty_ID, Request_Type, Disease_Type, Visit_Reason, Status) 
+            VALUES (%s, %s, %s, %s, %s, 'Pending') 
+            RETURNING Request_ID;
+        """, (patient_id, int(specialty_id), request_type, disease_type, visit_reason))
+        request_id = cursor.fetchone()[0]
+
+        files_to_save = [
+            ('id_front', 'ID_Front'),
+            ('id_back', 'ID_Back'),
+            ('medical_report', 'Medical_Report')
+        ]
+        for field_name, attachment_type in files_to_save:
+            file = request.files.get(field_name)
+            if file and file.filename:
+                saved_name = save_attachment(file, request_id, attachment_type)
+                if saved_name:
+                    cursor.execute("""
+                        INSERT INTO Attachments (Request_ID, Attachment_Type, File_Name) 
+                        VALUES (%s, %s, %s)
+                    """, (request_id, attachment_type, saved_name))
+
+        conn.commit()
+        return jsonify({
+            "success": True, 
+            "message": "تم إرسال طلبك بنجاح وسيتم فحصه من قبل الإدارة الطبية.",
+            "request_id": request_id
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
