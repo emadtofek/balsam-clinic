@@ -155,8 +155,8 @@ def run_db_initialization():
 
 # ----------------- إعدادات بوابة Textbee SMS ------txb_zLxMggon9vL3qTbKjbWz9nToJOwpp1D9----------
 TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY", "txb_zLxMggon9vL3qTbKjbWz9nToJOwpp1D9")
-TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID", "6a9dd76eccb6c72709195e0d)
-٩
+TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID", "6a9dd76eccb6c72709195e0d")
+
 def send_textbee_sms(phone_number, sms_text):
     url = f"https://api.textbee.dev/api/v1/gateway/devices/{TEXTBEE_DEVICE_ID}/send-sms"
     headers = {
